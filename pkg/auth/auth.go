@@ -13,10 +13,10 @@ import (
 	log "gopkg.in/clog.v1"
 	"gopkg.in/macaron.v1"
 
-	"github.com/gogits/gogs/models"
-	"github.com/gogits/gogs/models/errors"
-	"github.com/gogits/gogs/pkg/setting"
-	"github.com/gogits/gogs/pkg/tool"
+	"github.com/gogs/gogs/models"
+	"github.com/gogs/gogs/models/errors"
+	"github.com/gogs/gogs/pkg/setting"
+	"github.com/gogs/gogs/pkg/tool"
 )
 
 func IsAPIPath(url string) bool {
@@ -127,10 +127,10 @@ func SignedInUser(ctx *macaron.Context, sess session.Store) (*models.User, bool)
 			if len(auths) == 2 && auths[0] == "Basic" {
 				uname, passwd, _ := tool.BasicAuthDecode(auths[1])
 
-				u, err := models.UserSignIn(uname, passwd)
+				u, err := models.UserLogin(uname, passwd, -1)
 				if err != nil {
 					if !errors.IsUserNotExist(err) {
-						log.Error(4, "UserSignIn: %v", err)
+						log.Error(4, "UserLogin: %v", err)
 					}
 					return nil, false
 				}

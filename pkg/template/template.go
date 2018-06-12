@@ -21,10 +21,10 @@ import (
 	log "gopkg.in/clog.v1"
 	"gopkg.in/editorconfig/editorconfig-core-go.v1"
 
-	"github.com/gogits/gogs/models"
-	"github.com/gogits/gogs/pkg/markup"
-	"github.com/gogits/gogs/pkg/setting"
-	"github.com/gogits/gogs/pkg/tool"
+	"github.com/gogs/gogs/models"
+	"github.com/gogs/gogs/pkg/markup"
+	"github.com/gogs/gogs/pkg/setting"
+	"github.com/gogs/gogs/pkg/tool"
 )
 
 // TODO: only initialize map once and save to a local variable to reduce copies.
@@ -60,14 +60,16 @@ func NewFuncMap() []template.FuncMap {
 		"LoadTimes": func(startTime time.Time) string {
 			return fmt.Sprint(time.Since(startTime).Nanoseconds()/1e6) + "ms"
 		},
-		"AvatarLink":   tool.AvatarLink,
-		"Safe":         Safe,
-		"Sanitize":     bluemonday.UGCPolicy().Sanitize,
-		"Str2html":     Str2html,
-		"TimeSince":    tool.TimeSince,
-		"RawTimeSince": tool.RawTimeSince,
-		"FileSize":     tool.FileSize,
-		"Subtract":     tool.Subtract,
+		"AvatarLink":       tool.AvatarLink,
+		"AppendAvatarSize": tool.AppendAvatarSize,
+		"Safe":             Safe,
+		"Sanitize":         bluemonday.UGCPolicy().Sanitize,
+		"Str2html":         Str2html,
+		"NewLine2br":       NewLine2br,
+		"TimeSince":        tool.TimeSince,
+		"RawTimeSince":     tool.RawTimeSince,
+		"FileSize":         tool.FileSize,
+		"Subtract":         tool.Subtract,
 		"Add": func(a, b int) int {
 			return a + b
 		},
@@ -127,6 +129,11 @@ func Safe(raw string) template.HTML {
 
 func Str2html(raw string) template.HTML {
 	return template.HTML(markup.Sanitize(raw))
+}
+
+// NewLine2br simply replaces "\n" to "<br>".
+func NewLine2br(raw string) string {
+	return strings.Replace(raw, "\n", "<br>", -1)
 }
 
 func List(l *list.List) chan interface{} {
@@ -265,6 +272,8 @@ func ActionIcon(opType int) string {
 		return "alert"
 	case 19: // Fork a repository
 		return "repo-forked"
+	case 20, 21, 22: // Mirror sync
+		return "repo-clone"
 	default:
 		return "invalid type"
 	}

@@ -11,12 +11,12 @@ import (
 	"github.com/go-macaron/captcha"
 	log "gopkg.in/clog.v1"
 
-	"github.com/gogits/gogs/models"
-	"github.com/gogits/gogs/models/errors"
-	"github.com/gogits/gogs/pkg/context"
-	"github.com/gogits/gogs/pkg/form"
-	"github.com/gogits/gogs/pkg/mailer"
-	"github.com/gogits/gogs/pkg/setting"
+	"github.com/gogs/gogs/models"
+	"github.com/gogs/gogs/models/errors"
+	"github.com/gogs/gogs/pkg/context"
+	"github.com/gogs/gogs/pkg/form"
+	"github.com/gogs/gogs/pkg/mailer"
+	"github.com/gogs/gogs/pkg/setting"
 )
 
 const (
@@ -80,12 +80,12 @@ func isValidRedirect(url string) bool {
 }
 
 func Login(c *context.Context) {
-	c.Data["Title"] = c.Tr("sign_in")
+	c.Title("sign_in")
 
-	// Check auto-login.
+	// Check auto-login
 	isSucceed, err := AutoLogin(c)
 	if err != nil {
-		c.Handle(500, "AutoLogin", err)
+		c.ServerError("AutoLogin", err)
 		return
 	}
 
@@ -100,13 +100,21 @@ func Login(c *context.Context) {
 		if isValidRedirect(redirectTo) {
 			c.Redirect(redirectTo)
 		} else {
-			c.Redirect(setting.AppSubURL + "/")
+			c.SubURLRedirect("/")
 		}
 		c.SetCookie("redirect_to", "", -1, setting.AppSubURL)
 		return
 	}
 
-	c.HTML(200, LOGIN)
+	// Display normal login page
+	loginSources, err := models.ActivatedLoginSources()
+	if err != nil {
+		c.ServerError("ActivatedLoginSources", err)
+		return
+	}
+	c.Data["LoginSources"] = loginSources
+
+	c.Success(LOGIN)
 }
 
 func afterLogin(c *context.Context, u *models.User, remember bool) {
@@ -134,23 +142,36 @@ func afterLogin(c *context.Context, u *models.User, remember bool) {
 		return
 	}
 
-	c.Redirect(setting.AppSubURL + "/")
+	c.SubURLRedirect("/")
 }
 
 func LoginPost(c *context.Context, f form.SignIn) {
-	c.Data["Title"] = c.Tr("sign_in")
+	c.Title("sign_in")
+
+	loginSources, err := models.ActivatedLoginSources()
+	if err != nil {
+		c.ServerError("ActivatedLoginSources", err)
+		return
+	}
+	c.Data["LoginSources"] = loginSources
 
 	if c.HasError() {
 		c.Success(LOGIN)
 		return
 	}
 
-	u, err := models.UserSignIn(f.UserName, f.Password)
+	u, err := models.UserLogin(f.UserName, f.Password, f.LoginSource)
 	if err != nil {
-		if errors.IsUserNotExist(err) {
+		switch err.(type) {
+		case errors.UserNotExist:
+			c.FormErr("UserName", "Password")
 			c.RenderWithErr(c.Tr("form.username_password_incorrect"), LOGIN, &f)
-		} else {
-			c.ServerError("UserSignIn", err)
+		case errors.LoginSourceMismatch:
+			c.FormErr("LoginSource")
+			c.RenderWithErr(c.Tr("form.auth_source_mismatch"), LOGIN, &f)
+
+		default:
+			c.ServerError("UserLogin", err)
 		}
 		return
 	}
@@ -162,7 +183,7 @@ func LoginPost(c *context.Context, f form.SignIn) {
 
 	c.Session.Set("twoFactorRemember", f.Remember)
 	c.Session.Set("twoFactorUserID", u.ID)
-	c.Redirect(setting.AppSubURL + "/user/login/two_factor")
+	c.SubURLRedirect("/user/login/two_factor")
 }
 
 func LoginTwoFactor(c *context.Context) {
@@ -187,13 +208,15 @@ func LoginTwoFactorPost(c *context.Context) {
 		c.ServerError("GetTwoFactorByUserID", err)
 		return
 	}
-	valid, err := t.ValidateTOTP(c.Query("passcode"))
+
+	passcode := c.Query("passcode")
+	valid, err := t.ValidateTOTP(passcode)
 	if err != nil {
 		c.ServerError("ValidateTOTP", err)
 		return
 	} else if !valid {
 		c.Flash.Error(c.Tr("settings.two_factor_invalid_passcode"))
-		c.Redirect(setting.AppSubURL + "/user/login/two_factor")
+		c.SubURLRedirect("/user/login/two_factor")
 		return
 	}
 
@@ -202,6 +225,17 @@ func LoginTwoFactorPost(c *context.Context) {
 		c.ServerError("GetUserByID", err)
 		return
 	}
+
+	// Prevent same passcode from being reused
+	if c.Cache.IsExist(u.TwoFactorCacheKey(passcode)) {
+		c.Flash.Error(c.Tr("settings.two_factor_reused_passcode"))
+		c.SubURLRedirect("/user/login/two_factor")
+		return
+	}
+	if err = c.Cache.Put(u.TwoFactorCacheKey(passcode), 1, 60); err != nil {
+		log.Error(2, "Failed to put cache 'two factor passcode': %v", err)
+	}
+
 	afterLogin(c, u, c.Session.Get("twoFactorRemember").(bool))
 }
 
@@ -225,7 +259,7 @@ func LoginTwoFactorRecoveryCodePost(c *context.Context) {
 	if err := models.UseRecoveryCode(userID, c.Query("recovery_code")); err != nil {
 		if errors.IsTwoFactorRecoveryCodeNotFound(err) {
 			c.Flash.Error(c.Tr("auth.login_two_factor_invalid_recovery_code"))
-			c.Redirect(setting.AppSubURL + "/user/login/two_factor_recovery_code")
+			c.SubURLRedirect("/user/login/two_factor_recovery_code")
 		} else {
 			c.ServerError("UseRecoveryCode", err)
 		}
@@ -246,46 +280,46 @@ func SignOut(c *context.Context) {
 	c.SetCookie(setting.CookieUserName, "", -1, setting.AppSubURL)
 	c.SetCookie(setting.CookieRememberName, "", -1, setting.AppSubURL)
 	c.SetCookie(setting.CSRFCookieName, "", -1, setting.AppSubURL)
-	c.Redirect(setting.AppSubURL + "/")
+	c.SubURLRedirect("/")
 }
 
 func SignUp(c *context.Context) {
-	c.Data["Title"] = c.Tr("sign_up")
+	c.Title("sign_up")
 
 	c.Data["EnableCaptcha"] = setting.Service.EnableCaptcha
 
 	if setting.Service.DisableRegistration {
 		c.Data["DisableRegistration"] = true
-		c.HTML(200, SIGNUP)
+		c.Success(SIGNUP)
 		return
 	}
 
-	c.HTML(200, SIGNUP)
+	c.Success(SIGNUP)
 }
 
 func SignUpPost(c *context.Context, cpt *captcha.Captcha, f form.Register) {
-	c.Data["Title"] = c.Tr("sign_up")
+	c.Title("sign_up")
 
 	c.Data["EnableCaptcha"] = setting.Service.EnableCaptcha
 
 	if setting.Service.DisableRegistration {
-		c.Error(403)
+		c.Status(403)
 		return
 	}
 
 	if c.HasError() {
-		c.HTML(200, SIGNUP)
+		c.Success(SIGNUP)
 		return
 	}
 
 	if setting.Service.EnableCaptcha && !cpt.VerifyReq(c.Req) {
-		c.Data["Err_Captcha"] = true
+		c.FormErr("Captcha")
 		c.RenderWithErr(c.Tr("form.captcha_incorrect"), SIGNUP, &f)
 		return
 	}
 
 	if f.Password != f.Retype {
-		c.Data["Err_Password"] = true
+		c.FormErr("Password")
 		c.RenderWithErr(c.Tr("form.password_not_match"), SIGNUP, &f)
 		return
 	}
@@ -299,19 +333,19 @@ func SignUpPost(c *context.Context, cpt *captcha.Captcha, f form.Register) {
 	if err := models.CreateUser(u); err != nil {
 		switch {
 		case models.IsErrUserAlreadyExist(err):
-			c.Data["Err_UserName"] = true
+			c.FormErr("UserName")
 			c.RenderWithErr(c.Tr("form.username_been_taken"), SIGNUP, &f)
 		case models.IsErrEmailAlreadyUsed(err):
-			c.Data["Err_Email"] = true
+			c.FormErr("Email")
 			c.RenderWithErr(c.Tr("form.email_been_used"), SIGNUP, &f)
 		case models.IsErrNameReserved(err):
-			c.Data["Err_UserName"] = true
+			c.FormErr("UserName")
 			c.RenderWithErr(c.Tr("user.form.name_reserved", err.(models.ErrNameReserved).Name), SIGNUP, &f)
 		case models.IsErrNamePatternNotAllowed(err):
-			c.Data["Err_UserName"] = true
+			c.FormErr("UserName")
 			c.RenderWithErr(c.Tr("user.form.name_pattern_not_allowed", err.(models.ErrNamePatternNotAllowed).Pattern), SIGNUP, &f)
 		default:
-			c.Handle(500, "CreateUser", err)
+			c.ServerError("CreateUser", err)
 		}
 		return
 	}
@@ -322,7 +356,7 @@ func SignUpPost(c *context.Context, cpt *captcha.Captcha, f form.Register) {
 		u.IsAdmin = true
 		u.IsActive = true
 		if err := models.UpdateUser(u); err != nil {
-			c.Handle(500, "UpdateUser", err)
+			c.ServerError("UpdateUser", err)
 			return
 		}
 	}
@@ -333,15 +367,15 @@ func SignUpPost(c *context.Context, cpt *captcha.Captcha, f form.Register) {
 		c.Data["IsSendRegisterMail"] = true
 		c.Data["Email"] = u.Email
 		c.Data["Hours"] = setting.Service.ActiveCodeLives / 60
-		c.HTML(200, ACTIVATE)
+		c.Success(ACTIVATE)
 
-		if err := c.Cache.Put("MailResendLimit_"+u.LowerName, u.LowerName, 180); err != nil {
-			log.Error(4, "Set cache(MailResendLimit) fail: %v", err)
+		if err := c.Cache.Put(u.MailResendCacheKey(), 1, 180); err != nil {
+			log.Error(2, "Failed to put cache key 'mail resend': %v", err)
 		}
 		return
 	}
 
-	c.Redirect(setting.AppSubURL + "/user/login")
+	c.SubURLRedirect("/user/login")
 }
 
 func Activate(c *context.Context) {
@@ -349,26 +383,25 @@ func Activate(c *context.Context) {
 	if len(code) == 0 {
 		c.Data["IsActivatePage"] = true
 		if c.User.IsActive {
-			c.Error(404)
+			c.NotFound()
 			return
 		}
 		// Resend confirmation email.
 		if setting.Service.RegisterEmailConfirm {
-			if c.Cache.IsExist("MailResendLimit_" + c.User.LowerName) {
+			if c.Cache.IsExist(c.User.MailResendCacheKey()) {
 				c.Data["ResendLimited"] = true
 			} else {
 				c.Data["Hours"] = setting.Service.ActiveCodeLives / 60
 				mailer.SendActivateAccountMail(c.Context, models.NewMailerUser(c.User))
 
-				keyName := "MailResendLimit_" + c.User.LowerName
-				if err := c.Cache.Put(keyName, c.User.LowerName, 180); err != nil {
-					log.Error(2, "Set cache '%s' fail: %v", keyName, err)
+				if err := c.Cache.Put(c.User.MailResendCacheKey(), 1, 180); err != nil {
+					log.Error(2, "Failed to put cache key 'mail resend': %v", err)
 				}
 			}
 		} else {
 			c.Data["ServiceNotEnabled"] = true
 		}
-		c.HTML(200, ACTIVATE)
+		c.Success(ACTIVATE)
 		return
 	}
 
@@ -377,11 +410,11 @@ func Activate(c *context.Context) {
 		user.IsActive = true
 		var err error
 		if user.Rands, err = models.GetUserSalt(); err != nil {
-			c.Handle(500, "UpdateUser", err)
+			c.ServerError("GetUserSalt", err)
 			return
 		}
 		if err := models.UpdateUser(user); err != nil {
-			c.Handle(500, "UpdateUser", err)
+			c.ServerError("UpdateUser", err)
 			return
 		}
 
@@ -389,12 +422,12 @@ func Activate(c *context.Context) {
 
 		c.Session.Set("uid", user.ID)
 		c.Session.Set("uname", user.Name)
-		c.Redirect(setting.AppSubURL + "/")
+		c.SubURLRedirect("/")
 		return
 	}
 
 	c.Data["IsActivateFailed"] = true
-	c.HTML(200, ACTIVATE)
+	c.Success(ACTIVATE)
 }
 
 func ActivateEmail(c *context.Context) {
@@ -404,35 +437,35 @@ func ActivateEmail(c *context.Context) {
 	// Verify code.
 	if email := models.VerifyActiveEmailCode(code, email_string); email != nil {
 		if err := email.Activate(); err != nil {
-			c.Handle(500, "ActivateEmail", err)
+			c.ServerError("ActivateEmail", err)
 		}
 
 		log.Trace("Email activated: %s", email.Email)
 		c.Flash.Success(c.Tr("settings.add_email_success"))
 	}
 
-	c.Redirect(setting.AppSubURL + "/user/settings/email")
+	c.SubURLRedirect("/user/settings/email")
 	return
 }
 
 func ForgotPasswd(c *context.Context) {
-	c.Data["Title"] = c.Tr("auth.forgot_password")
+	c.Title("auth.forgot_password")
 
 	if setting.MailService == nil {
 		c.Data["IsResetDisable"] = true
-		c.HTML(200, FORGOT_PASSWORD)
+		c.Success(FORGOT_PASSWORD)
 		return
 	}
 
 	c.Data["IsResetRequest"] = true
-	c.HTML(200, FORGOT_PASSWORD)
+	c.Success(FORGOT_PASSWORD)
 }
 
 func ForgotPasswdPost(c *context.Context) {
-	c.Data["Title"] = c.Tr("auth.forgot_password")
+	c.Title("auth.forgot_password")
 
 	if setting.MailService == nil {
-		c.Handle(403, "ForgotPasswdPost", nil)
+		c.Status(403)
 		return
 	}
 	c.Data["IsResetRequest"] = true
@@ -445,55 +478,55 @@ func ForgotPasswdPost(c *context.Context) {
 		if errors.IsUserNotExist(err) {
 			c.Data["Hours"] = setting.Service.ActiveCodeLives / 60
 			c.Data["IsResetSent"] = true
-			c.HTML(200, FORGOT_PASSWORD)
+			c.Success(FORGOT_PASSWORD)
 			return
 		} else {
-			c.Handle(500, "user.ResetPasswd(check existence)", err)
+			c.ServerError("GetUserByEmail", err)
 		}
 		return
 	}
 
 	if !u.IsLocal() {
-		c.Data["Err_Email"] = true
+		c.FormErr("Email")
 		c.RenderWithErr(c.Tr("auth.non_local_account"), FORGOT_PASSWORD, nil)
 		return
 	}
 
-	if c.Cache.IsExist("MailResendLimit_" + u.LowerName) {
+	if c.Cache.IsExist(u.MailResendCacheKey()) {
 		c.Data["ResendLimited"] = true
-		c.HTML(200, FORGOT_PASSWORD)
+		c.Success(FORGOT_PASSWORD)
 		return
 	}
 
 	mailer.SendResetPasswordMail(c.Context, models.NewMailerUser(u))
-	if err = c.Cache.Put("MailResendLimit_"+u.LowerName, u.LowerName, 180); err != nil {
-		log.Error(4, "Set cache(MailResendLimit) fail: %v", err)
+	if err = c.Cache.Put(u.MailResendCacheKey(), 1, 180); err != nil {
+		log.Error(2, "Failed to put cache key 'mail resend': %v", err)
 	}
 
 	c.Data["Hours"] = setting.Service.ActiveCodeLives / 60
 	c.Data["IsResetSent"] = true
-	c.HTML(200, FORGOT_PASSWORD)
+	c.Success(FORGOT_PASSWORD)
 }
 
 func ResetPasswd(c *context.Context) {
-	c.Data["Title"] = c.Tr("auth.reset_password")
+	c.Title("auth.reset_password")
 
 	code := c.Query("code")
 	if len(code) == 0 {
-		c.Error(404)
+		c.NotFound()
 		return
 	}
 	c.Data["Code"] = code
 	c.Data["IsResetForm"] = true
-	c.HTML(200, RESET_PASSWORD)
+	c.Success(RESET_PASSWORD)
 }
 
 func ResetPasswdPost(c *context.Context) {
-	c.Data["Title"] = c.Tr("auth.reset_password")
+	c.Title("auth.reset_password")
 
 	code := c.Query("code")
 	if len(code) == 0 {
-		c.Error(404)
+		c.NotFound()
 		return
 	}
 	c.Data["Code"] = code
@@ -511,24 +544,24 @@ func ResetPasswdPost(c *context.Context) {
 		u.Passwd = passwd
 		var err error
 		if u.Rands, err = models.GetUserSalt(); err != nil {
-			c.Handle(500, "UpdateUser", err)
+			c.ServerError("GetUserSalt", err)
 			return
 		}
 		if u.Salt, err = models.GetUserSalt(); err != nil {
-			c.Handle(500, "UpdateUser", err)
+			c.ServerError("GetUserSalt", err)
 			return
 		}
 		u.EncodePasswd()
 		if err := models.UpdateUser(u); err != nil {
-			c.Handle(500, "UpdateUser", err)
+			c.ServerError("UpdateUser", err)
 			return
 		}
 
 		log.Trace("User password reset: %s", u.Name)
-		c.Redirect(setting.AppSubURL + "/user/login")
+		c.SubURLRedirect("/user/login")
 		return
 	}
 
 	c.Data["IsResetFailed"] = true
-	c.HTML(200, RESET_PASSWORD)
+	c.Success(RESET_PASSWORD)
 }

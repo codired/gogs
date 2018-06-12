@@ -21,11 +21,11 @@ import (
 	log "gopkg.in/clog.v1"
 	"gopkg.in/macaron.v1"
 
-	"github.com/gogits/gogs/models"
-	"github.com/gogits/gogs/models/errors"
-	"github.com/gogits/gogs/pkg/context"
-	"github.com/gogits/gogs/pkg/setting"
-	"github.com/gogits/gogs/pkg/tool"
+	"github.com/gogs/gogs/models"
+	"github.com/gogs/gogs/models/errors"
+	"github.com/gogs/gogs/pkg/context"
+	"github.com/gogs/gogs/pkg/setting"
+	"github.com/gogs/gogs/pkg/tool"
 )
 
 const (
@@ -56,6 +56,18 @@ func askCredentials(c *context.Context, status int, text string) {
 
 func HTTPContexter() macaron.Handler {
 	return func(c *context.Context) {
+		if len(setting.HTTP.AccessControlAllowOrigin) > 0 {
+			// Set CORS headers for browser-based git clients
+			c.Resp.Header().Set("Access-Control-Allow-Origin", setting.HTTP.AccessControlAllowOrigin)
+			c.Resp.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+
+			// Handle preflight OPTIONS request
+			if c.Req.Method == "OPTIONS" {
+				c.Status(http.StatusOK)
+				return
+			}
+		}
+
 		ownerName := c.Params(":username")
 		repoName := strings.TrimSuffix(c.Params(":reponame"), ".git")
 		repoName = strings.TrimSuffix(repoName, ".wiki")
@@ -112,9 +124,9 @@ func HTTPContexter() macaron.Handler {
 			return
 		}
 
-		authUser, err := models.UserSignIn(authUsername, authPassword)
+		authUser, err := models.UserLogin(authUsername, authPassword, -1)
 		if err != nil && !errors.IsUserNotExist(err) {
-			c.Handle(http.StatusInternalServerError, "UserSignIn", err)
+			c.Handle(http.StatusInternalServerError, "UserLogin", err)
 			return
 		}
 

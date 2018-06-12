@@ -5,7 +5,7 @@
 		{{template "base/alert" .}}
 		{{if .PageIsRepoHome}}
 			<p id="repo-desc">
-				{{if .Repository.Description}}<span class="description has-emoji">{{.Repository.Description | Str2html}}</span>{{else}}<span class="no-description text-italic">{{.i18n.Tr "repo.no_desc"}}</span>{{end}}
+				{{if .Repository.Description}}<span class="description has-emoji">{{.Repository.Description | NewLine2br | Str2html}}</span>{{else}}<span class="no-description text-italic">{{.i18n.Tr "repo.no_desc"}}</span>{{end}}
 				<a class="link" href="{{.Repository.Website}}">{{.Repository.Website}}</a>
 			</p>
 			<div class="ui segment" id="git-stats">
@@ -25,7 +25,7 @@
 		<div class="ui secondary menu">
 			{{if .PullRequestCtx.Allowed}}
 				<div class="fitted item">
-					<a href="{{.BaseRepo.Link}}/compare/{{.BaseRepo.DefaultBranch}}...{{.PullRequestCtx.HeadInfo}}">
+					<a href="{{.BaseRepo.Link}}/compare/{{EscapePound .BaseRepo.DefaultBranch}}...{{EscapePound .PullRequestCtx.HeadInfo}}">
 						<button class="ui green small button"><i class="octicon octicon-git-compare"></i></button>
 					</a>
 				</div>

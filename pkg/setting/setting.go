@@ -25,11 +25,11 @@ import (
 	log "gopkg.in/clog.v1"
 	"gopkg.in/ini.v1"
 
-	"github.com/gogits/go-libravatar"
+	"github.com/gogs/go-libravatar"
 
-	"github.com/gogits/gogs/pkg/bindata"
-	"github.com/gogits/gogs/pkg/process"
-	"github.com/gogits/gogs/pkg/user"
+	"github.com/gogs/gogs/pkg/bindata"
+	"github.com/gogs/gogs/pkg/process"
+	"github.com/gogs/gogs/pkg/user"
 )
 
 type Scheme string
@@ -82,18 +82,19 @@ var (
 	}
 
 	SSH struct {
-		Disabled            bool           `ini:"DISABLE_SSH"`
-		StartBuiltinServer  bool           `ini:"START_SSH_SERVER"`
-		Domain              string         `ini:"SSH_DOMAIN"`
-		Port                int            `ini:"SSH_PORT"`
-		ListenHost          string         `ini:"SSH_LISTEN_HOST"`
-		ListenPort          int            `ini:"SSH_LISTEN_PORT"`
-		RootPath            string         `ini:"SSH_ROOT_PATH"`
-		ServerCiphers       []string       `ini:"SSH_SERVER_CIPHERS"`
-		KeyTestPath         string         `ini:"SSH_KEY_TEST_PATH"`
-		KeygenPath          string         `ini:"SSH_KEYGEN_PATH"`
-		MinimumKeySizeCheck bool           `ini:"MINIMUM_KEY_SIZE_CHECK"`
-		MinimumKeySizes     map[string]int `ini:"-"`
+		Disabled                     bool           `ini:"DISABLE_SSH"`
+		StartBuiltinServer           bool           `ini:"START_SSH_SERVER"`
+		Domain                       string         `ini:"SSH_DOMAIN"`
+		Port                         int            `ini:"SSH_PORT"`
+		ListenHost                   string         `ini:"SSH_LISTEN_HOST"`
+		ListenPort                   int            `ini:"SSH_LISTEN_PORT"`
+		RootPath                     string         `ini:"SSH_ROOT_PATH"`
+		RewriteAuthorizedKeysAtStart bool           `ini:"REWRITE_AUTHORIZED_KEYS_AT_START"`
+		ServerCiphers                []string       `ini:"SSH_SERVER_CIPHERS"`
+		KeyTestPath                  string         `ini:"SSH_KEY_TEST_PATH"`
+		KeygenPath                   string         `ini:"SSH_KEYGEN_PATH"`
+		MinimumKeySizeCheck          bool           `ini:"MINIMUM_KEY_SIZE_CHECK"`
+		MinimumKeySizes              map[string]int `ini:"-"`
 	}
 
 	// Security settings
@@ -250,7 +251,7 @@ var (
 		MaxGitDiffLines          int
 		MaxGitDiffLineCharacters int
 		MaxGitDiffFiles          int
-		GCArgs                   []string `delim:" "`
+		GCArgs                   []string `ini:"GC_ARGS" delim:" "`
 		Timeout                  struct {
 			Migrate int
 			Mirror  int
@@ -388,7 +389,7 @@ func getOpenSSHVersion() string {
 		log.Fatal(2, "Fail to get OpenSSH version: %v - %s", err, stderr)
 	}
 
-	// Trim unused information: https://github.com/gogits/gogs/issues/4507#issuecomment-305150441
+	// Trim unused information: https://github.com/gogs/gogs/issues/4507#issuecomment-305150441
 	version := strings.TrimRight(strings.Fields(stderr)[0], ",1234567890")
 	version = strings.TrimSuffix(strings.TrimPrefix(version, "OpenSSH_"), "p")
 	return version
@@ -486,6 +487,7 @@ func NewContext() {
 	}
 
 	SSH.RootPath = path.Join(homeDir, ".ssh")
+	SSH.RewriteAuthorizedKeysAtStart = sec.Key("REWRITE_AUTHORIZED_KEYS_AT_START").MustBool()
 	SSH.ServerCiphers = sec.Key("SSH_SERVER_CIPHERS").Strings(",")
 	SSH.KeyTestPath = os.TempDir()
 	if err = Cfg.Section("server").MapTo(&SSH); err != nil {
@@ -504,8 +506,12 @@ func NewContext() {
 		}
 	}
 
+	if SSH.StartBuiltinServer {
+		SSH.RewriteAuthorizedKeysAtStart = false
+	}
+
 	// Check if server is eligible for minimum key size check when user choose to enable.
-	// Windows server and OpenSSH version lower than 5.1 (https://github.com/gogits/gogs/issues/4507)
+	// Windows server and OpenSSH version lower than 5.1 (https://github.com/gogs/gogs/issues/4507)
 	// are forced to be disabled because the "ssh-keygen" in Windows does not print key type.
 	if SSH.MinimumKeySizeCheck &&
 		(IsWindows || version.Compare(getOpenSSHVersion(), "5.1", "<")) {
@@ -771,6 +777,14 @@ func newLogService() {
 				BufferSize: Cfg.Section("log").Key("BUFFER_LEN").MustInt64(100),
 				URL:        sec.Key("URL").String(),
 			}
+
+		case log.DISCORD:
+			LogConfigs[i] = log.DiscordConfig{
+				Level:      level,
+				BufferSize: Cfg.Section("log").Key("BUFFER_LEN").MustInt64(100),
+				URL:        sec.Key("URL").String(),
+				Username:   sec.Key("USERNAME").String(),
+			}
 		}
 
 		log.New(log.MODE(mode), LogConfigs[i])
@@ -802,7 +816,7 @@ func newSessionService() {
 	SessionConfig.Provider = Cfg.Section("session").Key("PROVIDER").In("memory",
 		[]string{"memory", "file", "redis", "mysql"})
 	SessionConfig.ProviderConfig = strings.Trim(Cfg.Section("session").Key("PROVIDER_CONFIG").String(), "\" ")
-	SessionConfig.CookieName = Cfg.Section("session").Key("COOKIE_NAME").MustString("i_like_gogits")
+	SessionConfig.CookieName = Cfg.Section("session").Key("COOKIE_NAME").MustString("i_like_gogs")
 	SessionConfig.CookiePath = AppSubURL
 	SessionConfig.Secure = Cfg.Section("session").Key("COOKIE_SECURE").MustBool()
 	SessionConfig.Gclifetime = Cfg.Section("session").Key("GC_INTERVAL_TIME").MustInt64(3600)
@@ -815,7 +829,7 @@ func newSessionService() {
 // Mailer represents mail service.
 type Mailer struct {
 	QueueLength       int
-	Subject           string
+	SubjectPrefix     string
 	Host              string
 	From              string
 	FromEmail         string
@@ -842,7 +856,7 @@ func newMailService() {
 
 	MailService = &Mailer{
 		QueueLength:    sec.Key("SEND_BUFFER_LEN").MustInt(100),
-		Subject:        sec.Key("SUBJECT").MustString(AppName),
+		SubjectPrefix:  sec.Key("SUBJECT_PREFIX").MustString("[" + AppName + "] "),
 		Host:           sec.Key("HOST").String(),
 		User:           sec.Key("USER").String(),
 		Passwd:         sec.Key("PASSWD").String(),

@@ -15,8 +15,8 @@ import (
 	"github.com/go-xorm/xorm"
 	log "gopkg.in/clog.v1"
 
-	"github.com/gogits/gogs/pkg/setting"
-	"github.com/gogits/gogs/pkg/tool"
+	"github.com/gogs/gogs/pkg/setting"
+	"github.com/gogs/gogs/pkg/tool"
 )
 
 type NoticeType int
@@ -74,7 +74,7 @@ func CreateRepositoryNotice(desc string) error {
 // creates a system notice when error occurs.
 func RemoveAllWithNotice(title, path string) {
 	var err error
-	// LEGACY [Go 1.7]: workaround for Go not being able to remove read-only files/folders: https://github.com/golang/go/issues/9606
+	// LEGACY [Go 1.7, 0.12]: workaround for Go not being able to remove read-only files/folders: https://github.com/golang/go/issues/9606
 	// this bug should be fixed on Go 1.7, so the workaround should be removed when Gogs don't support Go 1.6 anymore:
 	// https://github.com/golang/go/commit/2ffb3e5d905b5622204d199128dec06cefd57790
 	// Note: Windows complains when delete target does not exist, therefore we can skip deletion in such cases.

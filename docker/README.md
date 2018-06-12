@@ -1,6 +1,6 @@
 # Docker for Gogs
 
-Visit [Docker Hub](https://hub.docker.com/r/gogs/) / [Docker Store](https://store.docker.com/community/images/gogs/gogs) see all available images and tags.
+Visit [Docker Cloud](https://cloud.docker.com/swarm/gogs/repository/docker/gogs/gogs) / [Docker Store](https://store.docker.com/community/images/gogs/gogs) see all available images and tags.
 
 ## Usage
 
@@ -35,6 +35,10 @@ Directory `/var/gogs` keeps Git repositories and Gogs data:
         |-- conf
         |-- data
         |-- log
+
+#### Custom Directory
+
+The "custom" directory may not be obvious in Docker environment. The `/var/gogs/gogs` (in the host) and `/data/gogs` (in the container) is already the "custom" directory and you do not need to create another layer but directly edit corresponding files under this directory.
 
 ### Volume With Data Container
 

@@ -18,7 +18,7 @@ import (
 	log "gopkg.in/clog.v1"
 	"gopkg.in/gomail.v2"
 
-	"github.com/gogits/gogs/pkg/setting"
+	"github.com/gogs/gogs/pkg/setting"
 )
 
 type Message struct {
@@ -34,7 +34,7 @@ func NewMessageFrom(to []string, from, subject, htmlBody string) *Message {
 	msg := gomail.NewMessage()
 	msg.SetHeader("From", from)
 	msg.SetHeader("To", to...)
-	msg.SetHeader("Subject", subject)
+	msg.SetHeader("Subject", setting.MailService.SubjectPrefix+subject)
 	msg.SetDateHeader("Date", time.Now())
 
 	contentType := "text/html"

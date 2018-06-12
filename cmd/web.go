@@ -29,20 +29,20 @@ import (
 	log "gopkg.in/clog.v1"
 	"gopkg.in/macaron.v1"
 
-	"github.com/gogits/gogs/models"
-	"github.com/gogits/gogs/pkg/bindata"
-	"github.com/gogits/gogs/pkg/context"
-	"github.com/gogits/gogs/pkg/form"
-	"github.com/gogits/gogs/pkg/mailer"
-	"github.com/gogits/gogs/pkg/setting"
-	"github.com/gogits/gogs/pkg/template"
-	"github.com/gogits/gogs/routes"
-	"github.com/gogits/gogs/routes/admin"
-	apiv1 "github.com/gogits/gogs/routes/api/v1"
-	"github.com/gogits/gogs/routes/dev"
-	"github.com/gogits/gogs/routes/org"
-	"github.com/gogits/gogs/routes/repo"
-	"github.com/gogits/gogs/routes/user"
+	"github.com/gogs/gogs/models"
+	"github.com/gogs/gogs/pkg/bindata"
+	"github.com/gogs/gogs/pkg/context"
+	"github.com/gogs/gogs/pkg/form"
+	"github.com/gogs/gogs/pkg/mailer"
+	"github.com/gogs/gogs/pkg/setting"
+	"github.com/gogs/gogs/pkg/template"
+	"github.com/gogs/gogs/routes"
+	"github.com/gogs/gogs/routes/admin"
+	apiv1 "github.com/gogs/gogs/routes/api/v1"
+	"github.com/gogs/gogs/routes/dev"
+	"github.com/gogs/gogs/routes/org"
+	"github.com/gogs/gogs/routes/repo"
+	"github.com/gogs/gogs/routes/user"
 )
 
 var Web = cli.Command{
@@ -171,6 +171,8 @@ func runWeb(c *cli.Context) error {
 	reqSignOut := context.Toggle(&context.ToggleOptions{SignOutRequired: true})
 
 	bindIgnErr := binding.BindIgnErr
+
+	m.SetAutoHead(true)
 
 	// FIXME: not all routes need go through same middlewares.
 	// Especially some AJAX requests, we can reduce middleware number to improve performance.
@@ -635,8 +637,10 @@ func runWeb(c *cli.Context) error {
 		// e.g. with or without ".git" suffix.
 		m.Group("/:reponame([\\d\\w-_\\.]+\\.git$)", func() {
 			m.Get("", ignSignIn, context.RepoAssignment(), context.RepoRef(), repo.Home)
+			m.Options("/*", ignSignInAndCsrf, repo.HTTPContexter(), repo.HTTP)
 			m.Route("/*", "GET,POST", ignSignInAndCsrf, repo.HTTPContexter(), repo.HTTP)
 		})
+		m.Options("/:reponame/*", ignSignInAndCsrf, repo.HTTPContexter(), repo.HTTP)
 		m.Route("/:reponame/*", "GET,POST", ignSignInAndCsrf, repo.HTTPContexter(), repo.HTTP)
 	})
 	// ***** END: Repository *****
@@ -723,7 +727,7 @@ func runWeb(c *cli.Context) error {
 	}
 
 	if err != nil {
-		log.Fatal(4, "Fail to start server: %v", err)
+		log.Fatal(4, "Failed to start server: %v", err)
 	}
 
 	return nil

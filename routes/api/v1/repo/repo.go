@@ -9,22 +9,22 @@ import (
 
 	log "gopkg.in/clog.v1"
 
-	api "github.com/gogits/go-gogs-client"
-	"github.com/gogits/git-module"
+	api "github.com/gogs/go-gogs-client"
+	"github.com/gogs/git-module"
 
-	"github.com/gogits/gogs/models"
-	"github.com/gogits/gogs/models/errors"
-	"github.com/gogits/gogs/pkg/context"
-	"github.com/gogits/gogs/pkg/form"
-	"github.com/gogits/gogs/pkg/setting"
-	"github.com/gogits/gogs/routes/api/v1/convert"
-	"github.com/gogits/gogs/pkg/markup"
+	"github.com/gogs/gogs/models"
+	"github.com/gogs/gogs/models/errors"
+	"github.com/gogs/gogs/pkg/context"
+	"github.com/gogs/gogs/pkg/form"
+	"github.com/gogs/gogs/pkg/setting"
+	"github.com/gogs/gogs/routes/api/v1/convert"
+	"github.com/gogs/gogs/pkg/markup"
 	"bytes"
-	"github.com/gogits/gogs/pkg/tool"
+	"github.com/gogs/gogs/pkg/tool"
 	"io/ioutil"
 )
 
-// https://github.com/gogits/go-gogs-client/wiki/Repositories#search-repositories
+// https://github.com/gogs/go-gogs-client/wiki/Repositories#search-repositories
 func Search(c *context.APIContext) {
 	opts := &models.SearchRepoOptions{
 		Keyword:  path.Base(c.Query("q")),
@@ -187,7 +187,7 @@ func CreateUserRepo(c *context.APIContext, owner *models.User, opt api.CreateRep
 	c.JSON(201, repo.APIFormat(&api.Permission{true, true, true}))
 }
 
-// https://github.com/gogits/go-gogs-client/wiki/Repositories#create
+// https://github.com/gogs/go-gogs-client/wiki/Repositories#create
 func Create(c *context.APIContext, opt api.CreateRepoOption) {
 	// Shouldn't reach this condition, but just in case.
 	if c.User.IsOrganization() {
@@ -215,7 +215,7 @@ func CreateOrgRepo(c *context.APIContext, opt api.CreateRepoOption) {
 	CreateUserRepo(c, org, opt)
 }
 
-// https://github.com/gogits/go-gogs-client/wiki/Repositories#migrate
+// https://github.com/gogs/go-gogs-client/wiki/Repositories#migrate
 func Migrate(c *context.APIContext, f form.MigrateRepo) {
 	ctxUser := c.User
 	// Not equal means context user is an organization,
@@ -319,7 +319,7 @@ func parseOwnerAndRepo(c *context.APIContext) (*models.User, *models.Repository)
 	return owner, repo
 }
 
-// https://github.com/gogits/go-gogs-client/wiki/Repositories#get
+// https://github.com/gogs/go-gogs-client/wiki/Repositories#get
 func Get(c *context.APIContext) {
 	_, repo := parseOwnerAndRepo(c)
 	if c.Written() {
@@ -333,7 +333,7 @@ func Get(c *context.APIContext) {
 	}))
 }
 
-// https://github.com/gogits/go-gogs-client/wiki/Repositories#delete
+// https://github.com/gogs/go-gogs-client/wiki/Repositories#delete
 func Delete(c *context.APIContext) {
 	owner, repo := parseOwnerAndRepo(c)
 	if c.Written() {
@@ -510,4 +510,3 @@ func GetTree(c *context.APIContext) {
 
 	c.JSON(202, &model)
 }
-

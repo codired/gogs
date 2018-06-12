@@ -21,11 +21,11 @@ import (
 	log "gopkg.in/clog.v1"
 	"gopkg.in/macaron.v1"
 
-	"github.com/gogits/gogs/models"
-	"github.com/gogits/gogs/models/errors"
-	"github.com/gogits/gogs/pkg/auth"
-	"github.com/gogits/gogs/pkg/form"
-	"github.com/gogits/gogs/pkg/setting"
+	"github.com/gogs/gogs/models"
+	"github.com/gogs/gogs/models/errors"
+	"github.com/gogs/gogs/pkg/auth"
+	"github.com/gogs/gogs/pkg/form"
+	"github.com/gogs/gogs/pkg/setting"
 )
 
 // Context represents context of a request.
@@ -244,7 +244,7 @@ func Contexter() macaron.Handler {
 			}
 
 			prefix := setting.AppURL + path.Join(ownerName, repoName, "src", branchName)
-			c.PlainText(http.StatusOK, []byte(com.Expand(`
+			c.PlainText(http.StatusOK, []byte(com.Expand(`<!doctype html>
 <html>
 	<head>
 		<meta name="go-import" content="{GoGetImport} git {CloneLink}">

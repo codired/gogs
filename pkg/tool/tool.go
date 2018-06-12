@@ -22,9 +22,9 @@ import (
 	"github.com/Unknwon/i18n"
 	log "gopkg.in/clog.v1"
 
-	"github.com/gogits/chardet"
+	"github.com/gogs/chardet"
 
-	"github.com/gogits/gogs/pkg/setting"
+	"github.com/gogs/gogs/pkg/setting"
 )
 
 // MD5Bytes encodes string to MD5 bytes.
@@ -199,12 +199,20 @@ func AvatarLink(email string) (url string) {
 		}
 	}
 	if len(url) == 0 && !setting.DisableGravatar {
-		url = setting.GravatarSource + HashEmail(email)
+		url = setting.GravatarSource + HashEmail(email) + "?d=identicon"
 	}
 	if len(url) == 0 {
 		url = setting.AppSubURL + "/img/avatar_default.png"
 	}
 	return url
+}
+
+// AppendAvatarSize appends avatar size query parameter to the URL in the correct format.
+func AppendAvatarSize(url string, size int) string {
+	if strings.Contains(url, "?") {
+		return url + "&s=" + com.ToStr(size)
+	}
+	return url + "?s=" + com.ToStr(size)
 }
 
 // Seconds-based time units

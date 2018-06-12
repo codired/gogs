@@ -11,14 +11,14 @@ import (
 
 	log "gopkg.in/clog.v1"
 
-	"github.com/gogits/git-module"
+	"github.com/gogs/git-module"
 
-	"github.com/gogits/gogs/models"
-	"github.com/gogits/gogs/models/errors"
-	"github.com/gogits/gogs/pkg/context"
-	"github.com/gogits/gogs/pkg/form"
-	"github.com/gogits/gogs/pkg/mailer"
-	"github.com/gogits/gogs/pkg/setting"
+	"github.com/gogs/gogs/models"
+	"github.com/gogs/gogs/models/errors"
+	"github.com/gogs/gogs/pkg/context"
+	"github.com/gogs/gogs/pkg/form"
+	"github.com/gogs/gogs/pkg/mailer"
+	"github.com/gogs/gogs/pkg/setting"
 )
 
 const (
@@ -111,7 +111,7 @@ func SettingsPost(c *context.Context, f form.RepoSetting) {
 		if f.Interval > 0 {
 			c.Repo.Mirror.EnablePrune = f.EnablePrune
 			c.Repo.Mirror.Interval = f.Interval
-			c.Repo.Mirror.NextUpdate = time.Now().Add(time.Duration(f.Interval) * time.Hour)
+			c.Repo.Mirror.NextSync = time.Now().Add(time.Duration(f.Interval) * time.Hour)
 			if err := models.UpdateMirror(c.Repo.Mirror); err != nil {
 				c.ServerError("UpdateMirror", err)
 				return
@@ -433,7 +433,7 @@ func SettingsProtectedBranch(c *context.Context) {
 
 	protectBranch, err := models.GetProtectBranchOfRepoByName(c.Repo.Repository.ID, branch)
 	if err != nil {
-		if !models.IsErrBranchNotExist(err) {
+		if !errors.IsErrBranchNotExist(err) {
 			c.Handle(500, "GetProtectBranchOfRepoByName", err)
 			return
 		}
@@ -475,7 +475,7 @@ func SettingsProtectedBranchPost(c *context.Context, f form.ProtectBranch) {
 
 	protectBranch, err := models.GetProtectBranchOfRepoByName(c.Repo.Repository.ID, branch)
 	if err != nil {
-		if !models.IsErrBranchNotExist(err) {
+		if !errors.IsErrBranchNotExist(err) {
 			c.Handle(500, "GetProtectBranchOfRepoByName", err)
 			return
 		}

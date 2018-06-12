@@ -23,9 +23,9 @@ import (
 	"golang.org/x/crypto/ssh"
 	log "gopkg.in/clog.v1"
 
-	"github.com/gogits/gogs/pkg/process"
-	"github.com/gogits/gogs/pkg/setting"
-	"github.com/gogits/gogs/pkg/tool"
+	"github.com/gogs/gogs/pkg/process"
+	"github.com/gogs/gogs/pkg/setting"
+	"github.com/gogs/gogs/pkg/tool"
 )
 
 const (
@@ -512,15 +512,17 @@ func DeletePublicKey(doer *User, id int64) (err error) {
 		return err
 	}
 
-	return RewriteAllPublicKeys()
+	return RewriteAuthorizedKeys()
 }
 
-// RewriteAllPublicKeys removes any authorized key and rewrite all keys from database again.
+// RewriteAuthorizedKeys removes any authorized key and rewrite all keys from database again.
 // Note: x.Iterate does not get latest data after insert/delete, so we have to call this function
 // outsite any session scope independently.
-func RewriteAllPublicKeys() error {
+func RewriteAuthorizedKeys() error {
 	sshOpLocker.Lock()
 	defer sshOpLocker.Unlock()
+
+	log.Trace("Doing: RewriteAuthorizedKeys")
 
 	os.MkdirAll(setting.SSH.RootPath, os.ModePerm)
 	fpath := filepath.Join(setting.SSH.RootPath, "authorized_keys")

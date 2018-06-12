@@ -1,5 +1,5 @@
-LDFLAGS += -X "github.com/gogits/gogs/pkg/setting.BuildTime=$(shell date -u '+%Y-%m-%d %I:%M:%S %Z')"
-LDFLAGS += -X "github.com/gogits/gogs/pkg/setting.BuildGitHash=$(shell git rev-parse HEAD)"
+LDFLAGS += -X "github.com/gogs/gogs/pkg/setting.BuildTime=$(shell date -u '+%Y-%m-%d %I:%M:%S %Z')"
+LDFLAGS += -X "github.com/gogs/gogs/pkg/setting.BuildGitHash=$(shell git rev-parse HEAD)"
 
 DATA_FILES := $(shell find conf | sed 's/ /\\ /g')
 LESS_FILES := $(wildcard public/less/gogs.less public/less/_*.less)
@@ -14,6 +14,7 @@ RELEASE_ROOT = "release"
 RELEASE_GOGS = "release/gogs"
 NOW = $(shell date -u '+%Y%m%d%I%M%S')
 GOVET = go tool vet -composites=false -methods=false -structtags=false
+GOPATH = $(shell echo $${PWD%%src*})
 
 .PHONY: build pack release bindata clean
 
@@ -56,7 +57,7 @@ release: build pack
 bindata: pkg/bindata/bindata.go
 
 pkg/bindata/bindata.go: $(DATA_FILES)
-	go-bindata -o=$@ -ignore="\\.DS_Store|README.md|TRANSLATORS" -pkg=bindata conf/...
+	go-bindata -o=$@ -ignore="\\.DS_Store|README.md|TRANSLATORS|auth.d" -pkg=bindata conf/...
 
 less: public/css/gogs.css
 
